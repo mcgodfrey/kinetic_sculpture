@@ -1,3 +1,15 @@
+/*
+ * Arduino control code for kinetic sculpture clone
+ * Based on the mojo base project for initialising the FPGA
+ * 
+ * Once all the initialisation is done, the arduino is used to control
+ *  the FPGA. I has a programmed sequence for each of the balls, and it
+ *  loops through, updating the positions of all the balls every x ms.
+ *  Once it has sent all the new positions to the FPGA it waits until
+ *  it's interval timer expires and then sends a trigger to get the FPGA
+ *  to actually update all the positions.
+ * 
+*/
 #include "hardware.h"
 #include "ring_buffer.h"
 #include <SPI.h>
@@ -84,7 +96,7 @@ void userLoop() {
 	static unsigned int interval_no = 0;
 	static unsigned int prev_time = milis();
 	if (servo_num < NUM_SERVOS) {
-		servo_pos = calcualte_servo_pos(servo_no, interval_no*interval);
+		servo_pos = calculate_servo_pos(servo_no, interval_no*interval);
 		write_servo_pos(servo_num, servo_pos);
 		servo_num++;
 	} else {
@@ -95,7 +107,6 @@ void userLoop() {
 			prev_time = curr_time;
 			servo_num = 0;
 			interval_no++;
-			
 		}
 	}
 }
