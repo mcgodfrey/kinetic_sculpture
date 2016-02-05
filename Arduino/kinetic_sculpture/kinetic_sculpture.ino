@@ -75,7 +75,7 @@ void userLoop() {
 	//State machine
 	switch(progState){
 		case INIT:
-			//rinitialise all the variables
+			//initialise all the variables
 			num_servos = get_num_servos();
 			num_intervals = get_prog_time()/interval;
 			//set each servo pos to 127
