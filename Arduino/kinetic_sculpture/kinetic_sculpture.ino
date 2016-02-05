@@ -2,19 +2,29 @@
  * Arduino control code for kinetic sculpture clone
  * Based on the mojo base project for initialising the FPGA
  * 
- * Once all the initialisation is done, the arduino is used to control
- *  the FPGA. I has a programmed sequence for each of the balls, and it
- *  loops through, updating the positions of all the balls every x ms.
- *  Once it has sent all the new positions to the FPGA it waits until
- *  it's interval timer expires and then sends a trigger to get the FPGA
- *  to actually update all the positions.
+ * Once all the initialisation is done, the arduino controls the program.
+ *  It has the full program data (all the ball positions) in memory somewhere
+ *  every ?ms it calculates all the new ball positions and sends these to the FPGA
+ *   where they are buffered and held until the arduino sends a trigger.
+ *
+ * The details of how/where the ball positions are stored are abstracted away from this function
+ *  All that it does is call the function calc_servo_pos() in positions.c 
+ *  Currently all the data is assumed to be in the EEPROM. But, this is only 1kB which is
+ *   not enough for any significant program. 
+ *  Since everything is abstracted away it shouldn't be too hard to change this in the future
+ *   It could be saved in an external eeprom for example.
  * 
-*/
+ * Matt Godfrey
+ * Feb 2016
+ * 
+ */
+ 
 #include "hardware.h"
 #include "ring_buffer.h"
 #include <SPI.h>
 #include "flash.h"
-#include "registers.h"
+#include "definitions.h"
+#include "positions.h"
 
 typedef enum {
   IDLE,
@@ -31,83 +41,79 @@ typedef enum {
 } 
 taskState_t;
 
-//update interval (ms)
-int interval = 100;
-
-//Trigger is pin 1 of the avr_flags
-#define TRIGGER_PORT PORTB
-#define TRIGGER_DDR DDRB
-#define TRIGGER_PIN PINB
-#define TRIGGER_MASK 0x10
-
 uint8_t loadBuffer[800];
 RingBuffer_t serialBuffer;
 volatile taskState_t taskState = SERVICE;
 
-program prog_code;
-prog_code.all_servos[0].n=4;
-prog_code.all_servos[0].positions[0]=127;
-prog_code.all_servos[0].positions[1]=0;
-prog_code.all_servos[0].positions[2]=255;
-prog_code.all_servos[0].positions[3]=127;
-prog_code.all_servos[0].times[0]=0;
-prog_code.all_servos[0].times[1]=5000;
-prog_code.all_servos[0].times[2]=15000;
-prog_code.all_servos[0].times[3]=20000;
 
 
-unsigned char interp_pos(t, times, positions, n){
-	if (t == 0) {
-		return(positions[0]);
-	}
-	int i;
-	for (i = 0; i < n, i++) {
-		if (times[i] > t) {
-			break;
-		}
-	}
-	//linear interpolation
-	y_lin = (unsigned char)(1.0*(t - times[i])/(times[i-1] - times[i])*(positions[i-1]-positions[i]) + positions[i]);
-	return y_lin;
-}
+/* Main program loop. State Machine:
 
+	INIT  -----> PAUSE ------> UPDATE_POS --------> TRIGGER ->
+	                               ^                         |
+                                   |                         v
+                                   |<-------------------------
 
-unsigned char calc_servo_pos(prog_code,servo_no, t){
-	times = prog_code.all_servos[servo_no].times;
-	positions = prog_code.all_servos[servo_no].positions;
-	n = prog_code.all_servos[servo_no].n; 
-	
-	return (interp_pos(t, times, positions, n));
-}
-
-
-/* This is where you should add your own code! Feel free to edit anything here. 
- This function will work just like the Arduino loop() function in that it will
- be called over and over. You should try to not delay too long in the loop to 
- allow the Mojo to enter loading mode when requested. */
+	INIT is the default state on power on.
+		it resets all the positions to mid-level (127)
+		and then transitions into the PAUSE state to wait
+	PAUSE - does nothing. maintains positions where they are
+	UPDATE_POS - updates the positions of all the servos
+		It stays in this state, updating one servo per iteration
+			until they are all updated
+		Then it transitions into the TRIGGER state
+	TRIGGER - waits until the interval time has expired and then send trigger to FPGA
+		transitions back to UPDATE_POS state
+*/
 void userLoop() {
-	//for each stepper at next time
-	//  calculate new position
-	//  write_stepper_pos(servo_no, stepper_pos);
-	//wait for interval timer to expire
-	//pulse the update pin to get the fpga to update positions
-	
+	static unsigned char num_servos = 1;
+	static unsigned int num_intervals = 1;
 	static unsigned char servo_num = 0;
 	static unsigned int interval_no = 0;
 	static unsigned int prev_time = milis();
-	if (servo_num < NUM_SERVOS) {
-		servo_pos = calculate_servo_pos(servo_no, interval_no*interval);
-		write_servo_pos(servo_num, servo_pos);
-		servo_num++;
-	} else {
-		unsigned int current_time = millis();
-		if (curr_time > prev_time+interval) {
-			SET(TRIGGER,HIGH);	//pulse the TRIGGER pin to send
-			SET(TRIGGER,LOW);		//new positions to the servos
-			prev_time = curr_time;
+
+	//State machine
+	switch(progState){
+		case INIT:
+			//rinitialise all the variables
+			num_servos = get_num_servos();
+			num_intervals = get_prog_time()/interval;
+			//set each servo pos to 127
+			for(int i = 0; i < num_servos; i++){
+				write_servo_pos(i,127);
+			}
+			//trigger
+			SET(TRIGGER,HIGH);
+			SET(TRIGGER,LOW);
+			//next state
 			servo_num = 0;
-			interval_no++;
-		}
+			progState = PAUSE;
+			break;
+		case PAUSE:
+			//wait for something to wake us up!
+			//At the moment I just transition directly into the UPDATE_POS state
+			//eventually this could wait for a button press or serial trigger
+			prev_time = milis(); 
+			progState = UPDATE_POS;
+			break;
+		case UPDATE_POS:
+			if (servo_num < num_servos){
+				servo_pos = calculate_servo_pos(servo_no, interval_no*interval);
+				write_servo_pos(servo_num, servo_pos);
+				servo_num++;
+			} else {
+				progState = TRIGGER;
+			}
+			break;
+		case TRIGGER:
+			unsigned int current_time = millis();
+			if (curr_time > prev_time+interval) {
+				SET(TRIGGER,HIGH);
+				SET(TRIGGER,LOW);
+				prev_time = curr_time;
+				servo_num = 0;
+				interval_no = (interval_no+1)%num_intervals;
+			}
 	}
 }
 
@@ -116,10 +122,6 @@ void userInit() {
 	OUT(TRIGGER);			// TRIGGER is an output
 	SET(TRIGGER,LOW);		// active HIGH
 }
-
-
-
-
 
 
 /* this is used to undo any setup you did in initPostLoad */
