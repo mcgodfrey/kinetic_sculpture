@@ -1,0 +1,1 @@
+xpwr -intstyle ise -ol std mojo_top.ncd mojo_top.pcf -o mojo_top.pwr 

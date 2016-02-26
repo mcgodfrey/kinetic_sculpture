@@ -12,7 +12,6 @@
 	This means that it will probably reach it's limits at either end
 		and not quite scale correctly
 */
-
 module servo_controller (
 	input clk,
 	input rst,

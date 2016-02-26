@@ -7,9 +7,7 @@ module spi_slave(
     input sck,
     output done,
     input [7:0] din,
-    output [7:0] dout,
-    output reg frame_start,
-    output reg frame_end
+    output [7:0] dout
     );
 
 reg mosi_d, mosi_q;
@@ -21,7 +19,6 @@ reg done_d, done_q;
 reg [2:0] bit_ct_d, bit_ct_q;
 reg [7:0] dout_d, dout_q;
 reg miso_d, miso_q;
-reg frame_d, frame_q;
 
 assign miso = miso_q;
 assign done = done_q;
@@ -37,14 +34,6 @@ always @(*) begin
     done_d = 1'b0;
     bit_ct_d = bit_ct_q;
     dout_d = dout_q;
-    frame_d = ss_q;
-    frame_start = 1'b0;
-    frame_end = 1'b0;
-
-    if (frame_q == 1'b1 && ss_q == 1'b0)
-        frame_start = 1'b1;
-    if (frame_q == 1'b0 && ss_q == 1'b1)
-        frame_end = 1'b1;
 
     if (ss_q) begin
         bit_ct_d = 3'b0;
@@ -57,14 +46,10 @@ always @(*) begin
             if (bit_ct_q == 3'b111) begin
                 dout_d = {data_q[6:0], mosi_q};
                 done_d = 1'b1;
+                data_d = din;
             end
         end else if (sck_old_q && !sck_q) begin // falling edge
             miso_d = data_q[7];
-        end else if (!sck_q) begin
-            if (bit_ct_q == 3'd0) begin
-                miso_d = din[7];
-                data_d = din;
-            end
         end
     end
 end
@@ -87,8 +72,8 @@ always @(posedge clk) begin
     ss_q <= ss_d;
     data_q <= data_d;
     sck_old_q <= sck_old_d;
-    frame_q <= frame_d;
 
 end
+
 
 endmodule

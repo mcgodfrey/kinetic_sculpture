@@ -21,18 +21,13 @@ NET "spi_mosi" LOC = P44 | IOSTANDARD = LVTTL;
 NET "spi_miso" LOC = P45 | IOSTANDARD = LVTTL;
 NET "spi_ss" LOC = P48 | IOSTANDARD = LVTTL;
 NET "spi_sck" LOC = P43 | IOSTANDARD = LVTTL;
-
-#I have repurposed 1 of the avr flags
-NET "trigger" LOC = P46 | IOSTANDARD = LVTTL;
-NET "trigger" CLOCK_DEDICATED_ROUTE = FALSE;
-NET "avr_flags<0>" LOC = P61 | IOSTANDARD = LVTTL;
-NET "avr_flags<1>" LOC = P62 | IOSTANDARD = LVTTL;
-NET "avr_flags<2>" LOC = P65 | IOSTANDARD = LVTTL;
+NET "spi_channel<0>" LOC = P46 | IOSTANDARD = LVTTL;
+NET "spi_channel<1>" LOC = P61 | IOSTANDARD = LVTTL;
+NET "spi_channel<2>" LOC = P62 | IOSTANDARD = LVTTL;
+NET "spi_channel<3>" LOC = P65 | IOSTANDARD = LVTTL;
 
 NET "avr_tx" LOC = P55 | IOSTANDARD = LVTTL;
 NET "avr_rx" LOC = P59 | IOSTANDARD = LVTTL;
 NET "avr_rx_busy" LOC = P39 | IOSTANDARD = LVTTL;
 
-#servo connections
-NET "servo_out<0>" LOC = P100 | IOSTANDARD = LVCMOS33;
-#NET "servo_out<1>" LOC = P101 | IOSTANDARD = LVCMOS33;
+NET "servo_out<0>" LOC = P50 | IOSTANDARD = LVTTL;
