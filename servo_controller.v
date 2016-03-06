@@ -1,5 +1,7 @@
 /*
 	servo controller
+	Based on code from Mojo tutorial 
+	https://embeddedmicro.com/tutorials/mojo/servos
 	
 	takes an 8-bit position as an input
 	output a single pwm signal with period of ~20ms
@@ -24,6 +26,10 @@ module servo_controller (
 
 	assign servo = pwm_q;
 	
+	//position = 0-255
+	//I want to map this to 50,000-100,000 (which corresponds to 1ms-2ms @ 50MHz)
+	//this is approximately (position+165)<<8
+	//The servo output is set by comparing the position input with the value of the counter (ctr_q)
 	always @(*) begin
 		ctr_d = ctr_q + 1'b1;
 		
@@ -34,6 +40,9 @@ module servo_controller (
 		end
 	end
 	
+	//standard always block triggered on positive edge of clk
+	//rst sets the counter to zero.
+	//otherwise  the output (ctr_q) is set to the input (ctr_d)
 	always @(posedge clk) begin
 		if (rst) begin
 			ctr_q <= 1'b0;

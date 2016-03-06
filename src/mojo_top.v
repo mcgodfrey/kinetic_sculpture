@@ -1,3 +1,8 @@
+/*
+	Servo motor control demo module
+	Causes connected servos to swing back and forth with
+	   different periods, individually adjustable.
+*/
 module mojo_top(
     // 50MHz clock input
     input clk,
@@ -20,7 +25,7 @@ module mojo_top(
     input avr_rx_busy, // AVR Rx buffer full
 	 
     //outputs to the servos
-	 output [0:0] servo_out
+	 output [3:0] servo_out
     );
 
 wire rst = ~rst_n; // make reset active high
@@ -30,21 +35,43 @@ assign spi_miso = 1'bz;
 assign avr_rx = 1'bz;
 assign spi_channel = 4'bzzzz;
 
+//set the onboard LEDs to a pattern for debugging.
 assign led = 8'b01010101;
 
-wire [7:0] pos;
 
-counter #(.CTR_LEN(28)) pos_counter (
-  .clk(clk),
-  .rst(rst),
-  .value(pos)
-);
+localparam NUM_SERVOS = 4;
 
-servo_controller controller (
-  .clk(clk),
-  .rst(rst),
-  .position(pos),
-  .servo(servo_out[0])
-);
+//Pos is a 32 bit array (8 bits per servo)
+//It would probably be better to use a 2d array.
+wire [(NUM_SERVOS*8)-1:0] pos;
+
+
+genvar i;
+//Generate a serparate up/down counter for each servo
+//Each one moves at a different speed (different CTR_LEN)
+generate
+  for (i = 0; i < NUM_SERVOS; i=i+1) begin: counter_gen_loop
+    counter #(.CTR_LEN(26+i)) pos_counter (
+      .clk(clk),
+      .rst(rst),
+      .value(pos[(i+1)*8-1:i*8])
+    );
+  end
+endgenerate
+
+
+//loop to generate the servo controllers, 1 per servo.
+//each one has its position connected to the corresponding
+//   up/down counter generated above.
+generate
+  for (i = 0; i < NUM_SERVOS; i=i+1) begin: servo_gen_loop
+    servo_controller servo_sweep (
+      .clk(clk),
+      .rst(rst),
+      .position(pos[(i+1)*8-1:i*8]),
+      .servo(servo_out[i])
+    );
+  end
+endgenerate
 
 endmodule
